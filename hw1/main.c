@@ -152,11 +152,11 @@ FILE *create_virtual_file(const char *src) {
 
 int main() {
     const char *code_sample =
-        "int main{\n"
+        "int main(){\n"
         "int cd2025=5;\n"
         "int cd2025_ = 5；\n"
         "if （cd2025 == 5）｛\n"
-        "cd2025_ = 0：\n"
+        "cd2025_ = 0;\n"
         "｝\n"
         "else {\n"
         "cd2025_ = 1+2+(3+4)+5;\n"
@@ -164,7 +164,6 @@ int main() {
         "while (cd2025_+cd2025) {\n"
         "cd2025 = cd2025-1;\n"
         "｝\n"
-        "return 0;\n"
         "}";
 
     FILE *virtual_file = create_virtual_file(code_sample);
