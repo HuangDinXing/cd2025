@@ -13,6 +13,12 @@ enum TokenType {
     TOKEN_GREATER_EQUAL, TOKEN_LESS_EQUAL, TOKEN_IDENTIFIER
 };
 
+enum State {
+    STATE_START,
+    STATE_IDENTIFIER,
+    STATE_NUMBER
+};
+
 int is_alpha(int c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
@@ -26,17 +32,24 @@ int is_alnum_or_underscore(int c) {
 }
 
 int detect_keyword(const char *word) {
-    if (strcmp(word, "int") == 0 || strcmp(word, "return") == 0)
-        return TOKEN_TYPE;
-    if (strcmp(word, "if") == 0)
-        return TOKEN_IF;
-    if (strcmp(word, "main") == 0)
-        return TOKEN_MAIN;
-    if (strcmp(word, "else") == 0)
-        return TOKEN_ELSE;
-    if (strcmp(word, "while") == 0)
-        return TOKEN_WHILE;
-    return 0;
+    if (strcmp(word, "int") == 0 || strcmp(word, "return") == 0) return TOKEN_TYPE;
+    if (strcmp(word, "if") == 0) return TOKEN_IF;
+    if (strcmp(word, "main") == 0) return TOKEN_MAIN;
+    if (strcmp(word, "else") == 0) return TOKEN_ELSE;
+    if (strcmp(word, "while") == 0) return TOKEN_WHILE;
+    return TOKEN_IDENTIFIER;
+}
+
+void print_token(const char *str, int token_type) {
+    switch (token_type) {
+        case TOKEN_TYPE: printf("%s: TYPE_TOKEN\n", str); break;
+        case TOKEN_IF: printf("%s: IF_TOKEN\n", str); break;
+        case TOKEN_MAIN: printf("%s: MAIN_TOKEN\n", str); break;
+        case TOKEN_ELSE: printf("%s: ELSE_TOKEN\n", str); break;
+        case TOKEN_WHILE: printf("%s: WHILE_TOKEN\n", str); break;
+        case TOKEN_IDENTIFIER: printf("%s: ID_TOKEN\n", str); break;
+        case TOKEN_LITERAL: printf("%s: LITERAL_TOKEN\n", str); break;
+    }
 }
 
 int convert_fullwidth_operator(unsigned char a, unsigned char b, unsigned char c) {
@@ -60,85 +73,99 @@ int convert_fullwidth_operator(unsigned char a, unsigned char b, unsigned char c
 void perform_tokenize(FILE *src) {
     int ch;
     char buffer[MAX_TOKEN_LEN];
+    int buf_idx = 0;
+    enum State state = STATE_START;
 
     while ((ch = fgetc(src)) != EOF) {
-        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r')
-            continue;
-
-        if (is_alpha(ch)) {
-            int i = 0;
-            buffer[i++] = ch;
-            while ((ch = fgetc(src)) != EOF && is_alnum_or_underscore(ch)) {
-                buffer[i++] = ch;
-            }
-            buffer[i] = '\0';
-            if (ch != EOF) ungetc(ch, src);
-
-            int token = detect_keyword(buffer);
-            switch (token) {
-                case TOKEN_TYPE: printf("%s: TYPE_TOKEN\n", buffer); break;
-                case TOKEN_IF: printf("%s: IF_TOKEN\n", buffer); break;
-                case TOKEN_MAIN: printf("%s: MAIN_TOKEN\n", buffer); break;
-                case TOKEN_ELSE: printf("%s: ELSE_TOKEN\n", buffer); break;
-                case TOKEN_WHILE: printf("%s: WHILE_TOKEN\n", buffer); break;
-                default: printf("%s: ID_TOKEN\n", buffer); break;
+        if ((unsigned char)ch >= 0xE0) {
+            unsigned char a = ch, b = fgetc(src), c = fgetc(src);
+            int converted = convert_fullwidth_operator(a, b, c);
+            if (converted) {
+                ch = converted;
+            } else {
+                ungetc(c, src);
+                ungetc(b, src);
             }
         }
-        else if (is_digit(ch)) {
-            int i = 0;
-            buffer[i++] = ch;
-            while ((ch = fgetc(src)) != EOF && is_digit(ch)) {
-                buffer[i++] = ch;
-            }
-            buffer[i] = '\0';
-            if (ch != EOF) ungetc(ch, src);
-            printf("%s: LITERAL_TOKEN\n", buffer);
-        }
-        else {
-            if ((unsigned char)ch >= 0xE0) {
-                unsigned char a = ch, b = fgetc(src), c = fgetc(src);
-                int converted = convert_fullwidth_operator(a, b, c);
-                if (converted) {
-                    ch = converted;
+
+        switch (state) {
+            case STATE_START:
+                if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+                    // Skip whitespace
+                }
+                else if (is_alpha(ch)) {
+                    buffer[0] = ch;
+                    buf_idx = 1;
+                    state = STATE_IDENTIFIER;
+                }
+                else if (is_digit(ch)) {
+                    buffer[0] = ch;
+                    buf_idx = 1;
+                    state = STATE_NUMBER;
+                }
+                else {
+                    int next = fgetc(src);
+                    if (ch == '=' && next == '=') {
+                        printf("==: EQUAL_TOKEN\n");
+                    } else if (ch == '=') {
+                        if (next != EOF) ungetc(next, src);
+                        printf("=: ASSIGN_TOKEN\n");
+                    } else if (ch == '>' && next == '=') {
+                        printf(">=: GREATER_EQUAL_TOKEN\n");
+                    } else if (ch == '>') {
+                        if (next != EOF) ungetc(next, src);
+                        printf(">: GREATER_TOKEN\n");
+                    } else if (ch == '<' && next == '=') {
+                        printf("<=: LESS_EQUAL_TOKEN\n");
+                    } else if (ch == '<') {
+                        if (next != EOF) ungetc(next, src);
+                        printf("<: LESS_TOKEN\n");
+                    } else {
+                        if (next != EOF) ungetc(next, src);
+                        switch (ch) {
+                            case '+': printf("+: PLUS_TOKEN\n"); break;
+                            case '-': printf("-: MINUS_TOKEN\n"); break;
+                            case '(': printf("(: LEFTPAREN_TOKEN\n"); break;
+                            case ')': printf("): RIGHTPAREN_TOKEN\n"); break;
+                            case '{': printf("{: LEFTBRACE_TOKEN\n"); break;
+                            case '}': printf("}: RIGHTBRACE_TOKEN\n"); break;
+                            case ';': case ':': printf("%c: SEMICOLON_TOKEN\n", ch); break;
+                        }
+                    }
+                }
+                break;
+
+            case STATE_IDENTIFIER:
+                if (is_alnum_or_underscore(ch)) {
+                    buffer[buf_idx++] = ch;
                 } else {
-                    ungetc(c, src);
-                    ungetc(b, src);
+                    buffer[buf_idx] = '\0';
+                    ungetc(ch, src);
+                    int token = detect_keyword(buffer);
+                    print_token(buffer, token);
+                    state = STATE_START;
                 }
-            }
+                break;
 
-            int next = fgetc(src);
-            if (ch == '=' && next == '=') {
-                printf("==: EQUAL_TOKEN\n");
-            } else if (ch == '=') {
-                if (next != EOF) ungetc(next, src);
-                printf("=: ASSIGN_TOKEN\n");
-            }
-            else if (ch == '>' && next == '=') {
-                printf(">=: GREATER_EQUAL_TOKEN\n");
-            } else if (ch == '>') {
-                if (next != EOF) ungetc(next, src);
-                printf(">: GREATER_TOKEN\n");
-            }
-            else if (ch == '<' && next == '=') {
-                printf("<=: LESS_EQUAL_TOKEN\n");
-            } else if (ch == '<') {
-                if (next != EOF) ungetc(next, src);
-                printf("<: LESS_TOKEN\n");
-            }
-            else {
-                if (next != EOF) ungetc(next, src);
-                switch (ch) {
-                    case '+': printf("+: PLUS_TOKEN\n"); break;
-                    case '-': printf("-: MINUS_TOKEN\n"); break;
-                    case '(': printf("(: LEFTPAREN_TOKEN\n"); break;
-                    case ')': printf("): RIGHTPAREN_TOKEN\n"); break;
-                    case '{': printf("{: LEFTBRACE_TOKEN\n"); break;
-                    case '}': printf("}: RIGHTBRACE_TOKEN\n"); break;
-                    case ';': case ':': printf("%c: SEMICOLON_TOKEN\n", ch); break;
-                    default: break;
+            case STATE_NUMBER:
+                if (is_digit(ch)) {
+                    buffer[buf_idx++] = ch;
+                } else {
+                    buffer[buf_idx] = '\0';
+                    ungetc(ch, src);
+                    print_token(buffer, TOKEN_LITERAL);
+                    state = STATE_START;
                 }
-            }
+                break;
         }
+    }
+
+    if (state == STATE_IDENTIFIER || state == STATE_NUMBER) {
+        buffer[buf_idx] = '\0';
+        if (state == STATE_IDENTIFIER)
+            print_token(buffer, detect_keyword(buffer));
+        else
+            print_token(buffer, TOKEN_LITERAL);
     }
 }
 
@@ -174,6 +201,5 @@ int main() {
 
     perform_tokenize(virtual_file);
     fclose(virtual_file);
-
     return 0;
 }
