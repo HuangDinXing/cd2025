@@ -4,6 +4,7 @@
 
 #define MAX_TOKEN_LEN 100
 
+// 定義各種詞法單元（Token）種類
 enum TokenType {
     TOKEN_TYPE = 1, TOKEN_IF, TOKEN_MAIN, TOKEN_ELSE, TOKEN_WHILE,
     TOKEN_EQUAL = 11, TOKEN_GREATER, TOKEN_LESS, TOKEN_ASSIGN,
@@ -13,24 +14,29 @@ enum TokenType {
     TOKEN_GREATER_EQUAL, TOKEN_LESS_EQUAL, TOKEN_IDENTIFIER
 };
 
+// 定義 DFA 的三種狀態
 enum State {
     STATE_START,
     STATE_IDENTIFIER,
     STATE_NUMBER
 };
 
+// 檢查是否為字母
 int is_alpha(int c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
+// 檢查是否為數字
 int is_digit(int c) {
     return c >= '0' && c <= '9';
 }
 
+// 檢查是否為字母、數字或底線
 int is_alnum_or_underscore(int c) {
     return is_alpha(c) || is_digit(c) || c == '_';
 }
 
+// 辨識關鍵字（保留字）
 int detect_keyword(const char *word) {
     if (strcmp(word, "int") == 0 || strcmp(word, "return") == 0) return TOKEN_TYPE;
     if (strcmp(word, "if") == 0) return TOKEN_IF;
@@ -40,6 +46,7 @@ int detect_keyword(const char *word) {
     return TOKEN_IDENTIFIER;
 }
 
+// 輸出 token 與對應種類
 void print_token(const char *str, int token_type) {
     switch (token_type) {
         case TOKEN_TYPE: printf("%s: TYPE_TOKEN\n", str); break;
@@ -52,6 +59,7 @@ void print_token(const char *str, int token_type) {
     }
 }
 
+// 將全形符號轉換為對應半形符號
 int convert_fullwidth_operator(unsigned char a, unsigned char b, unsigned char c) {
     if (a == 0xEF && b == 0xBC) {
         switch (c) {
@@ -70,6 +78,7 @@ int convert_fullwidth_operator(unsigned char a, unsigned char b, unsigned char c
     return 0;
 }
 
+// DFA 詞法分析主程式
 void perform_tokenize(FILE *src) {
     int ch;
     char buffer[MAX_TOKEN_LEN];
@@ -77,6 +86,7 @@ void perform_tokenize(FILE *src) {
     enum State state = STATE_START;
 
     while ((ch = fgetc(src)) != EOF) {
+        // 嘗試轉換全形符號
         if ((unsigned char)ch >= 0xE0) {
             unsigned char a = ch, b = fgetc(src), c = fgetc(src);
             int converted = convert_fullwidth_operator(a, b, c);
@@ -89,21 +99,23 @@ void perform_tokenize(FILE *src) {
         }
 
         switch (state) {
+            // 初始狀態：判斷起始字元類型
             case STATE_START:
                 if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
-                    // Skip whitespace
+                    // 跳過空白字元
                 }
                 else if (is_alpha(ch)) {
                     buffer[0] = ch;
                     buf_idx = 1;
-                    state = STATE_IDENTIFIER;
+                    state = STATE_IDENTIFIER;  // 轉為識別字狀態
                 }
                 else if (is_digit(ch)) {
                     buffer[0] = ch;
                     buf_idx = 1;
-                    state = STATE_NUMBER;
+                    state = STATE_NUMBER;  // 轉為數字狀態
                 }
                 else {
+                    // 處理符號與運算子
                     int next = fgetc(src);
                     if (ch == '=' && next == '=') {
                         printf("==: EQUAL_TOKEN\n");
@@ -135,6 +147,7 @@ void perform_tokenize(FILE *src) {
                 }
                 break;
 
+            // 處理識別字狀態（ID 或保留字）
             case STATE_IDENTIFIER:
                 if (is_alnum_or_underscore(ch)) {
                     buffer[buf_idx++] = ch;
@@ -147,6 +160,7 @@ void perform_tokenize(FILE *src) {
                 }
                 break;
 
+            // 處理整數常數（Literal）
             case STATE_NUMBER:
                 if (is_digit(ch)) {
                     buffer[buf_idx++] = ch;
@@ -160,6 +174,7 @@ void perform_tokenize(FILE *src) {
         }
     }
 
+    // 檢查是否在結尾仍在識別字或數字狀態
     if (state == STATE_IDENTIFIER || state == STATE_NUMBER) {
         buffer[buf_idx] = '\0';
         if (state == STATE_IDENTIFIER)
@@ -169,6 +184,7 @@ void perform_tokenize(FILE *src) {
     }
 }
 
+// 建立虛擬檔案以模擬輸入來源
 FILE *create_virtual_file(const char *src) {
     FILE *fp = tmpfile();
     if (!fp) return NULL;
@@ -178,6 +194,7 @@ FILE *create_virtual_file(const char *src) {
 }
 
 int main() {
+    // 測試用 C 程式碼，含有全形符號
     const char *code_sample =
         "int main(){\n"
         "int cd2025=5;\n"
